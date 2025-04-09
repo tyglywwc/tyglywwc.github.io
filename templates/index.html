@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能盲人导航系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* 新增导航相关样式 */
+        .navigation-panel {
+            display: none;
+            margin-top: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        #pathCanvas {
+            border: 1px solid #ddd;
+            max-width: 100%;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .instruction-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .step-item {
+            padding: 8px 0;
+            border-bottom: 1px dashed #ddd;
+        }
+
+        .current-step {
+            font-weight: bold;
+            color: #4361ee;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        /* 图片放大模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+        }
+
+        .modal-content {
+            display: block;
+            max-width: 90%;
+            max-height: 90%;
+            margin: auto;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .close:hover {
+            color: #bbb;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <header class="brand-header">
+        <div class="brand-logo">
+            <i class="fas fa-fire" style="color: #ff6b35;"></i>
+            <span>TYGL.GivenFire</span>
+        </div>
+        <nav>
+            <a href="#features">功能</a>
+            <a href="#guide">使用指南</a>
+        </nav>
+    </header>
+
+    <!-- 顶部横幅 -->
+    <!-- 替换原有hero-banner部分 -->
+<div class="hero-banner">
+    <div class="slideshow-container">
+        <!-- 动态生成的图片将在这里插入 -->
+    </div>
+    <div class="hero-text">
+        <h1>GivenFire 盲人导航系统</h1>
+        <p>安全出行 · 自由探索</p>
+    </div>
+</div>
+
+    <div class="feature-cards">
+        <div class="card">
+            <div class="card-img" style="background-image: url('{{ url_for('static', filename='images/scan-icon.jpg') }}')"></div>
+            <div class="card-content">
+                <h3><i class="fas fa-camera"></i> 环境识别</h3>
+                <p>上传环境图片检测障碍物</p>
+                <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                <button class="btn-gradient" id="uploadBtn">
+                    <i class="fas fa-upload"></i> 上传图片
+                </button>
+                <div id="imagePreview" style="margin-top: 15px; text-align: center;">
+                    <img id="previewImage" style="max-width: 100%; border-radius: 8px; display: none; cursor: zoom-in;">
+                    <canvas id="detectionCanvas" style="max-width: 100%; border-radius: 8px; display: none; cursor: zoom-in;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-img" style="background-image: url('{{ url_for('static', filename='images/nav-icon.png') }}')"></div>
+            <div class="card-content">
+                <h3><i class="fas fa-route"></i> 智能导航</h3>
+                <p>获取最优路线避开障碍物</p>
+                <button class="btn-gradient" id="navigateBtn" disabled>
+                    <i class="fas fa-directions"></i> 开始导航
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="navigation-panel" id="navigationPanel">
+        <h3><i class="fas fa-map-marked-alt"></i> 导航路径</h3>
+        <canvas id="pathCanvas" width="500" height="500"></canvas>
+
+        <div class="instruction-card">
+            <h4><i class="fas fa-list-ol"></i> 导航指引</h4>
+            <div id="stepList"></div>
+            <div style="margin-top: 15px;">
+                <button class="btn-gradient" id="voiceGuideBtn" style="margin-right: 10px;">
+                    <i class="fas fa-volume-up"></i> 语音引导
+                </button>
+                <button class="btn-gradient" id="resetNavBtn" style="background: linear-gradient(45deg, #f72585, #7209b6);">
+                    <i class="fas fa-redo"></i> 重新规划
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图片放大模态框 -->
+    <div id="imageModal" class="modal">
+        <span class="close">&times;</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <footer class="brand-footer">
+        <div class="container">
+            <div class="brand-logo">
+                <i class="fas fa-fire"></i>
+                <span>GivenFire</span>
+            </div>
+            <p>© 2025 TYGL 盲人导航系统 · 版权所有</p>
+        </div>
+    </footer>
+<!-- 删除最后的JS代码块，保留外部引用即可 -->
+<script src="{{ url_for('static', filename='js/slideshow.js') }}"></script>
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    const banners = [
+    "{{ url_for('static', filename='images/banners/banner1.jpg') }}",
+    "{{ url_for('static', filename='images/banners/banner2.jpg') }}",
+    "{{ url_for('static', filename='images/banners/banner3.jpg') }}"
+];
+    <script>
+        // 全局变量
+        let detectionData = null;
+        let currentStep = 0;
+        let navigationPath = null;
+
+        // DOM元素
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const previewImage = document.getElementById('previewImage');
+        const detectionCanvas = document.getElementById('detectionCanvas');
+        const navigateBtn = document.getElementById('navigateBtn');
+        const navigationPanel = document.getElementById('navigationPanel');
+        const pathCanvas = document.getElementById('pathCanvas');
+        const stepList = document.getElementById('stepList');
+        const voiceGuideBtn = document.getElementById('voiceGuideBtn');
+        const resetNavBtn = document.getElementById('resetNavBtn');
+
+        // 图片放大相关
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+        const closeBtn = document.querySelector('.close');
+
+        // 初始化事件监听
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleImageUpload);
+        navigateBtn.addEventListener('click', startNavigation);
+        voiceGuideBtn.addEventListener('click', speakCurrentStep);
+        resetNavBtn.addEventListener('click', resetNavigation);
+        closeBtn.addEventListener('click', () => modal.style.display = 'none');
+
+        // 图片上传处理
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // 显示预览
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                previewImage.src = event.target.result;
+                previewImage.style.display = 'block';
+                detectionCanvas.style.display = 'none';
+                navigateBtn.disabled = true;
+
+                // 发送到后端分析
+                analyzeImage(file);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 分析图片
+        async function analyzeImage(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/detect', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    alert('检测失败: ' + (data.error || '未知错误'));
+                    return;
+                }
+
+                // 保存检测结果
+                detectionData = data;
+
+                // 绘制检测结果
+                drawDetectionResults(data);
+
+                // 启用导航按钮
+                navigateBtn.disabled = false;
+
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
+        }
+
+        // 绘制检测结果
+        function drawDetectionResults(data) {
+            const canvas = detectionCanvas;
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+
+            img.onload = function() {
+                // 设置canvas尺寸
+                canvas.width = img.width;
+                canvas.height = img.height;
+
+                // 绘制图像
+                ctx.drawImage(img, 0, 0, img.width, img.height);
+
+                // 绘制检测框
+                ctx.font = '16px Arial';
+                data.objects.forEach(obj => {
+                    const [x, y, w, h] = obj.bbox;
+
+                    // 绘制边界框
+                    ctx.strokeStyle = '#00FF00';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x, y, w, h);
+
+                    // 绘制标签背景
+                    ctx.fillStyle = '#00FF00';
+                    const label = `${obj.class} ${Math.round(obj.confidence * 100)}%`;
+                    const textWidth = ctx.measureText(label).width;
+                    ctx.fillRect(x, y - 25, textWidth + 10, 25);
+
+                    // 绘制标签文本
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText(label, x + 5, y - 7);
+                });
+
+                // 显示canvas，隐藏原始图片
+                previewImage.style.display = 'none';
+                canvas.style.display = 'block';
+
+                // 绑定点击放大事件
+                canvas.addEventListener('click', openImageModal);
+                previewImage.addEventListener('click', openImageModal);
+            };
+
+            img.src = data.image_url ? data.image_url : previewImage.src;
+        }
+
+        // 打开图片模态框
+        function openImageModal() {
+            modal.style.display = 'block';
+            modalImg.src = detectionCanvas.toDataURL('image/png');
+        }
+
+        // 开始导航
+        async function startNavigation() {
+            if (!detectionData || !detectionData.objects) {
+                alert('请先完成环境检测');
+                return;
+            }
+
+            try {
+                // 准备障碍物数据
+                const obstacles = detectionData.objects.map(obj => ({
+                    x: obj.center[0] / detectionData.image_size.width * 100,
+                    y: obj.center[1] / detectionData.image_size.height * 100,
+                    width: obj.bbox[2] / detectionData.image_size.width * 100,
+                    height: obj.bbox[3] / detectionData.image_size.height * 100,
+                    class: obj.class
+                }));
+
+                // 获取路径规划
+                const response = await fetch('/navigate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        obstacles: obstacles,
+                        start: [10, 10],  // 起点坐标（百分比）
+                        end: [90, 90]     // 终点坐标（百分比）
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || '路径规划失败');
+                }
+
+                // 保存导航路径
+                navigationPath = data;
+                currentStep = 0;
+
+                // 显示导航结果
+                visualizeNavigation(data);
+                generateNavigationSteps(data.path);
+
+                // 显示导航面板
+                navigationPanel.style.display = 'block';
+
+                // 滚动到导航面板
+                navigationPanel.scrollIntoView({ behavior: 'smooth' });
+
+                // 自动播报第一步
+                speakCurrentStep();
+
+            } catch (error) {
+                alert('导航错误: ' + error.message);
+            }
+        }
+
+        // 可视化导航路径
+        function visualizeNavigation(data) {
+            const ctx = pathCanvas.getContext('2d');
+            const canvas = pathCanvas;
+
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制网格背景
+            ctx.strokeStyle = '#eee';
+            ctx.lineWidth = 0.5;
+            const gridSize = 20;
+            const cellSize = canvas.width / gridSize;
+
+            for (let i = 0; i <= gridSize; i++) {
+                // 垂直线
+                ctx.beginPath();
+                ctx.moveTo(i * cellSize, 0);
+                ctx.lineTo(i * cellSize, canvas.height);
+                ctx.stroke();
+
+                // 水平线
+                ctx.beginPath();
+                ctx.moveTo(0, i * cellSize);
+                ctx.lineTo(canvas.width, i * cellSize);
+                ctx.stroke();
+            }
+
+            // 绘制障碍物
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+            data.obstacles.forEach(([x, y]) => {
+                ctx.beginPath();
+                ctx.arc(
+                    x / 100 * canvas.width,
+                    y / 100 * canvas.height,
+                    5, 0, Math.PI * 2
+                );
+                ctx.fill();
+            });
+
+            // 绘制路径
+            ctx.strokeStyle = '#4361ee';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+
+            data.path.forEach(([x, y], index) => {
+                const px = x / 100 * canvas.width;
+                const py = y / 100 * canvas.height;
+
+                if (index === 0) {
+                    ctx.moveTo(px, py);
+                    // 绘制起点
+                    ctx.fillStyle = '#4cc9f0';
+                    ctx.beginPath();
+                    ctx.arc(px, py, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#4361ee';
+                } else {
+                    ctx.lineTo(px, py);
+                }
+            });
+
+            ctx.stroke();
+
+            // 绘制终点
+            const [endX, endY] = data.path[data.path.length - 1];
+            ctx.fillStyle = '#7209b6';
+            ctx.beginPath();
+            ctx.arc(
+                endX / 100 * canvas.width,
+                endY / 100 * canvas.height,
+                8, 0, Math.PI * 2
+            );
+            ctx.fill();
+        }
+
+        // 生成导航步骤
+        function generateNavigationSteps(path) {
+            stepList.innerHTML = '';
+
+            if (path.length < 2) {
+                stepList.innerHTML = '<div class="step-item">您已到达目的地</div>';
+                return;
+            }
+
+            // 生成简化指令
+            let prevDirection = null;
+            let distance = 0;
+            let steps = [];
+
+            for (let i = 1; i < path.length; i++) {
+                const [x1, y1] = path[i-1];
+                const [x2, y2] = path[i];
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+
+                // 计算主要方向
+                let direction;
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    direction = dx > 0 ? 'right' : 'left';
+                } else {
+                    direction = dy > 0 ? 'down' : 'up';
+                }
+
+                // 计算步长（欧氏距离）
+                const stepDistance = Math.sqrt(dx*dx + dy*dy) * 0.3; // 换算为米
+
+                if (direction === prevDirection) {
+                    distance += stepDistance;
+                } else {
+                    if (prevDirection !== null) {
+                        steps.push({
+                            direction: prevDirection,
+                            distance: distance
+                        });
+                    }
+                    prevDirection = direction;
+                    distance = stepDistance;
+                }
+            }
+
+            // 添加最后一步
+            if (prevDirection !== null) {
+                steps.push({
+                    direction: prevDirection,
+                    distance: distance
+                });
+            }
+
+            // 显示步骤
+            steps.forEach((step, index) => {
+                const stepElement = document.createElement('div');
+                stepElement.className = 'step-item';
+                if (index === 0) stepElement.classList.add('current-step');
+
+                stepElement.innerHTML = `
+                    <i class="fas fa-${getDirectionIcon(step.direction)}"></i>
+                    ${getDirectionText(step.direction)}行走约 ${step.distance.toFixed(1)} 米
+                `;
+
+                stepElement.addEventListener('click', () => {
+                    currentStep = index;
+                    updateStepDisplay();
+                    speakCurrentStep();
+                });
+
+                stepList.appendChild(stepElement);
+            });
+        }
+
+        // 获取方向图标
+        function getDirectionIcon(direction) {
+            const icons = {
+                'up': 'arrow-up',
+                'down': 'arrow-down',
+                'left': 'arrow-left',
+                'right': 'arrow-right'
+            };
+            return icons[direction] || 'arrows-alt';
+        }
+
+        // 获取方向文本
+        function getDirectionText(direction) {
+            const texts = {
+                'up': '向前',
+                'down': '向后',
+                'left': '向左',
+                'right': '向右'
+            };
+            return texts[direction] || direction;
+        }
+
+        // 更新步骤显示
+        function updateStepDisplay() {
+            const steps = document.querySelectorAll('.step-item');
+            steps.forEach((step, index) => {
+                if (index === currentStep) {
+                    step.classList.add('current-step');
+                } else {
+                    step.classList.remove('current-step');
+                }
+            });
+        }
+
+        // 语音播报当前步骤
+        function speakCurrentStep() {
+            if (!navigationPath || !window.speechSynthesis) return;
+
+            const steps = document.querySelectorAll('.step-item');
+            if (steps.length === 0) return;
+
+            // 停止当前语音
+            window.speechSynthesis.cancel();
+
+            // 创建语音实例
+            const utterance = new SpeechSynthesisUtterance();
+            utterance.text = steps[currentStep].textContent.replace(/<\/?[^>]+(>|$)/g, "");
+            utterance.lang = 'zh-CN';
+            utterance.rate = 0.9;
+
+            // 语音结束切换到下一步
+            utterance.onend = function() {
+                if (currentStep < steps.length - 1) {
+                    currentStep++;
+                    updateStepDisplay();
+                }
+            };
+
+            // 开始播报
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // 重置导航
+        function resetNavigation() {
+            currentStep = 0;
+            updateStepDisplay();
+            speakCurrentStep();
+        }
+
+        // 键盘快捷键
+        document.addEventListener('keydown', function(e) {
+            // 空格键播报当前步骤
+            if (e.key === ' ' && navigationPanel.style.display === 'block') {
+                e.preventDefault();
+                speakCurrentStep();
+            }
+
+            // 方向键切换步骤
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                if (currentStep < document.querySelectorAll('.step-item').length - 1) {
+                    currentStep++;
+                    updateStepDisplay();
+                }
+            }
+
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                if (currentStep > 0) {
+                    currentStep--;
+                    updateStepDisplay();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
